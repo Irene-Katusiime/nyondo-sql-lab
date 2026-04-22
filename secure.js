@@ -2,28 +2,42 @@ const Database = require('better-sqlite3');
 const db = new Database('nyondo_stock.db');
 
 function searchProductSafe(name) {
-    // The '?' is a placeholder. We pass the data separately.
+    // Validation: At least 2 characters, no < > or ;
+    if (typeof name !== 'string' || name.length < 2) {
+        console.log(`Validation Error: "${name}" is too short.`);
+        return [];
+    }
+    if (/[<>;]/.test(name)) {
+        console.log(`Validation Error: "${name}" contains forbidden characters.`);
+        return [];
+    }
+
     const sql = "SELECT * FROM products WHERE name LIKE ?";
-    const stmt = db.prepare(sql);
-    
-    // We concatenate the wildcards here, not in the SQL string
-    const rows = stmt.all(`%${name}%`);
-    return rows;
+    return db.prepare(sql).all(`%${name}%`);
 }
 
 function loginSafe(username, password) {
-    // The engine treats '?' as literal data, never as code
+    // Validation: No spaces, not empty
+    if (typeof username !== 'string' || username.trim().length === 0 || /\s/.test(username)) {
+        console.log(`Validation Error: Username "${username}" is invalid (empty or contains spaces).`);
+        return undefined;
+    }
+    // Validation: Password at least 6 characters
+    if (typeof password !== 'string' || password.length < 6) {
+        console.log(`Validation Error: Password for "${username}" is too short.`);
+        return undefined;
+    }
+
     const sql = "SELECT * FROM users WHERE username = ? AND password = ?";
-    const stmt = db.prepare(sql);
-    
-    const row = stmt.get(username, password);
-    return row;
+    return db.prepare(sql).get(username, password);
 }
 
-// These must ALL return undefined or [] because the injection is treated as a literal string
-console.log('Test 1:', searchProductSafe("' OR 1=1--"));
-console.log('Test 2:', searchProductSafe("' UNION SELECT id,username,password,role FROM users--"));
-console.log('Test 3:', loginSafe("admin'--", 'anything'));
-console.log('Test 4:', loginSafe("' OR '1'='1", "' OR '1'='1"));
+// --- TEST CASES ---
+console.log('Test 1 (Valid):', searchProductSafe('cement'));
+console.log('Test 2 (Empty):', searchProductSafe(''));
+console.log('Test 3 (Script):', searchProductSafe('<script>'));
+console.log('Test 4 (Login Valid):', loginSafe('admin', 'admin123'));
+console.log('Test 5 (Pass Short):', loginSafe('admin', 'ab'));
+console.log('Test 6 (User Space):', loginSafe('ad min', 'pass123'));
 
 db.close();
